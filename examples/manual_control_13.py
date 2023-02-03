@@ -65,6 +65,7 @@ from __future__ import print_function
 import glob
 import os
 import sys
+import utm
 
 
 try:
@@ -195,7 +196,7 @@ class ApolloFeatures:
         #self.clock_writer = self.node.create_writer('/clock',Clock)
         #self.location_reader = self.reader_node.create_reader('/apollo/control', ControlCommand, control_callback)
 
-    def send_localization_msg(self,carla_actor_player):
+    def send_localization_msg(self,world, carla_actor_player):
         global current_speed
         #clock_msg = Clock()
         #clock_msg.clock = cyber_time.Time.now()
@@ -262,15 +263,15 @@ class ApolloFeatures:
         localization_msg.pose.euler_angles.z =  yaw_for_euler    ## for testing
 
 
-
-
         #######################################################################################
         ####################### Carla transform to Apollo transform ###########################
         
         transform_msg = TransformStampeds()
         transform_msg.header.timestamp_sec = cyber_time.Time.now().to_sec()
         transform_msg.header.frame_id = "world"
+
         #print("heading: ", heading , " shift on x : ",- shift * math.cos(heading)," shift on y : ",- shift * math.sin(heading))
+
         child = transform_msg.transforms.add()
         child.child_frame_id = "localization"
         child.transform.translation.x = x - shift * math.cos(heading)
@@ -383,8 +384,13 @@ class ApolloFeatures:
         #print("old x : ", x)
         #print("old y : ", y)
         
-        #print("new x : ", localization_msg.pose.position.x)
-        #print("new y : ", localization_msg.pose.position.y)
+        localization_msg.pose.position.x, localization_msg.pose.position.y, zone, ut = utm.from_latlon(world.gnss_sensor.lat, world.gnss_sensor.lon)
+        # # print(x,y)
+
+        # print("new x : ", localization_msg.pose.position.x)
+        # print("new y : ", localization_msg.pose.position.y)
+        
+
         self.location_writer.write(localization_msg)
 
     
@@ -448,22 +454,21 @@ class ApolloFeatures:
         #print("walkers: ", walkers_num)
         #print("vehicles: ", vehicles_num)        
         #for actor in self.bridge.child_actors.values():
-        """
         
-        obstacles.header.CopyFrom(self.bridge.get_cyber_header())
-        for actor in self.bridge.child_actors.values():
-            if actor.carla_actor is not self.parent_actor:
-                print ("actor in object sensore: ", actor.carla_actor)
-                print("actor: ", self.get_actor_display_name(actor.carla_actor))
-                if actor.carla_actor.get_location().distance(self.parent_actor.get_location()) <= self.range:
-                    if isinstance(actor.carla_actor, carla.Vehicle):
-                        obstacles.perception_obstacle.append(actor.get_cyber_obstacle_msg())
-                    elif isinstance(actor.carla_actor, carla.Walker):
-                        msg = actor.get_cyber_obstacle_msg()
-                        msg.type = PerceptionObstacle.Type.PEDESTRIAN
-                        obstacles.perception_obstacle.append(msg)
-        self.bridge.write_cyber_message(self.channel_name, obstacles)
-        """  
+        # obstacles.header.CopyFrom(self.bridge.get_cyber_header())
+        # for actor in self.bridge.child_actors.values():
+        #     if actor.carla_actor is not self.parent_actor:
+        #         print ("actor in object sensore: ", actor.carla_actor)
+        #         print("actor: ", self.get_actor_display_name(actor.carla_actor))
+        #         if actor.carla_actor.get_location().distance(self.parent_actor.get_location()) <= self.range:
+        #             if isinstance(actor.carla_actor, carla.Vehicle):
+        #                 obstacles.perception_obstacle.append(actor.get_cyber_obstacle_msg())
+        #             elif isinstance(actor.carla_actor, carla.Walker):
+        #                 msg = actor.get_cyber_obstacle_msg()
+        #                 msg.type = PerceptionObstacle.Type.PEDESTRIAN
+        #                 obstacles.perception_obstacle.append(msg)
+        # self.bridge.write_cyber_message(self.channel_name, obstacles)
+
 
 # ==============================================================================
 # ---- Spawn obstacles ---------------------------------------------------------
@@ -1567,20 +1572,24 @@ class GnssSensor(object):
         This is the inverse of the _location_to_gps method found in
         https://github.com/carla-simulator/scenario_runner/blob/master/srunner/tools/route_manipulation.py
         """
-        EARTH_RADIUS_EQUA = 6378137.0
-        # The following reference values are applicable for towns 1 through 7,
-        # and are taken from the corresponding CARLA OpenDrive map files.
-        LAT_REF = 49.0
-        LON_REF = 8.0
+        # EARTH_RADIUS_EQUA = 6378137.0
+        # # The following reference values are applicable for towns 1 through 7,
+        # # and are taken from the corresponding CARLA OpenDrive map files.
+        # LAT_REF = 49.0
+        # LON_REF = 8.0
 
-        scale = math.cos(LAT_REF * math.pi / 180.0)
-        basex = scale * math.pi * EARTH_RADIUS_EQUA / 180.0 * LON_REF
-        basey = scale * EARTH_RADIUS_EQUA * math.log(
-            math.tan((90.0 + LAT_REF) * math.pi / 360.0))
+        # scale = math.cos(LAT_REF * math.pi / 180.0)
 
-        x = scale * math.pi * EARTH_RADIUS_EQUA / 180.0 * longitude - basex
-        y = scale * EARTH_RADIUS_EQUA * math.log(
-            math.tan((90.0 + latitude) * math.pi / 360.0)) - basey
+        # basex = scale * math.pi * EARTH_RADIUS_EQUA / 180.0 * LON_REF
+        # basey = scale * EARTH_RADIUS_EQUA * math.log(
+        #     math.tan((90.0 + LAT_REF) * math.pi / 360.0))
+
+        # x = scale * math.pi * EARTH_RADIUS_EQUA / 180.0 * longitude - basex
+        # y = scale * EARTH_RADIUS_EQUA * math.log(
+        #     math.tan((90.0 + latitude) * math.pi / 360.0)) - basey
+
+        x, y, zone, ut = utm.from_latlon(latitude, longitude)
+
 
         # This wasn't in the original carla method, but seems to be necessary.
         y *= -1
@@ -2017,10 +2026,11 @@ def game_loop(args):
             #ego.set_target_velocity(carla.Vector3D(x=velocity_in_world[0],y=velocity_in_world[1],z=velocity_in_world[2]))
             if args.sync:
                 sim_world.tick()
-            #if not cyber.is_shutdown():
-                #apollo_test.send_localization_msg(ego)
-                #apollo_test.send_chassis_msg(ego)
-             #   apollo_test.send_obstacles_msg(ego,sim_world)
+            if not cyber.is_shutdown():
+                # print(world.gnss_sensor.lat)
+                apollo_test.send_localization_msg(world,ego)
+                # apollo_test.send_chassis_msg(ego)
+                apollo_test.send_obstacles_msg(ego,sim_world)
             clock.tick_busy_loop(60)
             if controller.parse_events(client, world, clock, args.sync):
                 return
@@ -2088,8 +2098,8 @@ def main():
     argparser.add_argument(
         '--res',
         metavar='WIDTHxHEIGHT',
-        default='1280x720',
-        help='window resolution (default: 1280x720)')
+        default='640x480',
+        help='window resolution (default: 640x480)')
     #argparser.add_argument(
     #    '--filter',
      #   metavar='PATTERN',

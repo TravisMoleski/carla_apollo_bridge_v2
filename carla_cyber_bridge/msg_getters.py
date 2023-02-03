@@ -10,6 +10,7 @@ import carla
 import numpy as np
 import math
 import cv2
+import utm
 
 from cyber_py import cyber, cyber_time
 from modules.localization.proto.localization_pb2 import LocalizationEstimate
@@ -47,7 +48,8 @@ class Type:    # obstacle type in proto in apollo v7.0.0 has modifications of th
 # ------- get localization message ---------------------------------------------
 # ==============================================================================
 
-def get_localization_msg(carla_actor_player):
+def get_localization_msg(world, carla_actor_player):
+    print("GETTING LOCO...")
 
     transform = carla_actor_player.get_transform()
     linear_vel = carla_actor_player.get_velocity()
@@ -195,8 +197,12 @@ def get_localization_msg(carla_actor_player):
     #print("old x : ", x)
     #print("old y : ", y)
     
-    #print("new x : ", localization_msg.pose.position.x)
-    #print("new y : ", localization_msg.pose.position.y)
+    # print("TRYING...")
+    # localization_msg.pose.position.x, localization_msg.pose.position.y, zone, ut = utm.from_latlon(world.gnss_sensor.latitude, world.gnss_sensor.longitude)
+    # print("new x : ", localization_msg.pose.position.x)
+    # print("new y : ", localization_msg.pose.position.y)
+    # print(x,y)
+
     return localization_msg
 
 # ==============================================================================
@@ -292,7 +298,7 @@ def get_obstacles_msg(world,player) :
             obstacle.type = Type.VEHICLE
 
         obstacle.length = box.extent.x * 2 
-        obstacle.width = box.extent.y * 2 
+        obstacle.width  = box.extent.y * 2 
         obstacle.height = box.extent.z * 2 
 
     return obstacles
@@ -304,12 +310,13 @@ def get_obstacles_msg(world,player) :
 # ==============================================================================
 
 def get_camera_msg(image):
-   
-    image_data_array = np.ndarray(shape=(720, 1280, 4), dtype=np.uint8, buffer=image.raw_data)
+    image_data_array = np.ndarray(shape=(image.height, image.width, 4), dtype=np.uint8, buffer=image.raw_data)
+
     cyber_img = CompressedImage()
-    
-    #cyber_img.frame_id = cyber_img.header.frame_id
+    # cyber_img.header.CopyFrom(self.parent.get_cyber_header())
+    # cyber_img.header.frame_id = self.carla_actor.attributes['role_name']
+    # cyber_img.frame_id = cyber_img.header.frame_id
     cyber_img.format = 'jpeg'
-    #cyber_img.measurement_time = cyber_img.header.timestamp_sec
+    cyber_img.measurement_time = cyber_img.header.timestamp_sec
     cyber_img.data = cv2.imencode('.jpg', image_data_array)[1].tostring()
     return cyber_img

@@ -26,6 +26,7 @@ from modules.perception.proto.perception_obstacle_pb2 import PerceptionObstacle,
 from modules.planning.proto.planning_pb2 import ADCTrajectory
 from modules.drivers.proto.sensor_image_pb2 import CompressedImage
 
+import sys
 # ==============================================================================
 # -- global variables ----------------------------------------------------------
 # ==============================================================================
@@ -107,12 +108,16 @@ class ApolloNode:
     def publish_data(self):
         #print("publish is called")
         if self.params['publish_localization_chassis_msgs']:
+
             chassis_msg = get_chassis_msg(self.player,self.planning_flag,self.ego_speed)
+
             chassis_msg.header.sequence_num = self.msg_seq_counter
             self.chassis_writer.write(chassis_msg)
 
-            localization_msg = get_localization_msg(self.player)
+            localization_msg = get_localization_msg(self.sim_world, self.player)
             localization_msg.header.sequence_num = self.msg_seq_counter
+
+
             self.location_writer.write(localization_msg)
 
         if self.params['publish_camera_msg']:
@@ -307,8 +312,17 @@ def main():
     ########### get sensor actors ##########
     sensors = {}
     camera = carla_world.get_actors().filter('sensor.camera.rgb')[0]
+    # gnss   = carla_world.get_blueprint_library().find('sensor.other.gnss')
+
+
+    # print("GOT GNSS", )
+
+    # sys.exit(1)
+
     if camera:
         sensors['camera'] = camera
+    # if gnss:
+    #     sensors['gnss'] = gnss
 
     publishing_rate = params['publishing_rate']
     
